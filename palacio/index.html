@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Diego Palacio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,800&display=swap">
+<link rel="preload" as="image" href="assets/diego.png">
+<link rel="preload" as="image" href="assets/bolsa.png">
+<link rel="preload" as="image" href="assets/guardia.png">
+<style>
+  /* Fondo negro, letras blancas: lienzo a pantalla completa con capas de menú encima */
+  :root {
+    --bg: #000;
+    --fg: #fff;
+    --muted: rgba(255, 255, 255, 0.6);
+    --glow: rgba(255, 255, 255, 0.6);
+    --gold: #f2b705;
+    --display: "Bricolage Grotesque", "Helvetica Neue", Arial, sans-serif;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    height: 100%;
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--display);
+    font-weight: 500;
+    overflow: hidden;
+    overscroll-behavior: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  [hidden] { display: none !important; }
+
+  .overlay {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 28px;
+    text-align: center;
+    padding-block: max(24px, env(safe-area-inset-top, 0px)) max(24px, env(safe-area-inset-bottom, 0px));
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    background: rgba(0, 0, 0, 0.82);
+    z-index: 2;
+  }
+
+  /* Título con la animación del Hello World */
+  h1, h2 {
+    margin: 0;
+    font-weight: 800;
+    line-height: .95;
+    letter-spacing: -0.03em;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    column-gap: .28em;
+  }
+  h1 { font-size: clamp(3rem, 15vw, 8.5rem); }
+  h2 { font-size: clamp(2.6rem, 12vw, 6rem); }
+  .word { display: inline-flex; white-space: nowrap; }
+  .ch {
+    display: inline-block;
+    animation:
+      rise 1.1s cubic-bezier(.2, .9, .25, 1.15) both,
+      wave 3.2s ease-in-out infinite;
+    animation-delay: calc(var(--i) * 70ms), calc(1.4s + var(--i) * 110ms);
+  }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(0.6em) rotate(8deg) scale(.8); filter: blur(14px); }
+    to   { opacity: 1; transform: none; filter: blur(0); }
+  }
+  @keyframes wave {
+    0%, 60%, 100% { transform: translateY(0); text-shadow: 0 0 0 transparent; }
+    30% { transform: translateY(-0.12em); text-shadow: 0 0 0.35em var(--glow); }
+  }
+  .fade { animation: rise .9s cubic-bezier(.2, .9, .25, 1.1) both; animation-delay: var(--d, .9s); }
+
+  .cast { display: flex; align-items: flex-end; justify-content: center; gap: 18px; }
+  .cast figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .cast img { width: 64px; height: 64px; object-fit: contain; }
+  .cast figcaption { font-size: .78rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+
+  button {
+    font: inherit;
+    font-weight: 800;
+    font-size: 1.4rem;
+    letter-spacing: .02em;
+    color: var(--bg);
+    background: var(--fg);
+    border: 2px solid var(--fg);
+    border-radius: 14px;
+    padding: 16px 52px;
+    cursor: pointer;
+    transition: transform .15s, box-shadow .2s;
+  }
+  button:hover { transform: translateY(-2px); box-shadow: 0 0 28px var(--glow); }
+  button:focus-visible { outline: 3px solid var(--fg); outline-offset: 4px; }
+
+  .note { margin: 0; font-size: .95rem; color: var(--muted); letter-spacing: .04em; }
+  .help { margin: 0; font-size: .9rem; color: var(--muted); max-width: 32ch; text-wrap: balance; }
+  .final { margin: 0; font-size: 1.3rem; }
+  .final strong { font-size: 3rem; display: block; font-weight: 800; font-variant-numeric: tabular-nums; }
+
+  .hud {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: max(14px, env(safe-area-inset-top, 0px));
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    font-weight: 800;
+    font-size: 1.5rem;
+    font-variant-numeric: tabular-nums;
+    pointer-events: none;
+    z-index: 1;
+  }
+  .hud .best { font-size: 1rem; font-weight: 500; color: var(--muted); }
+  .bump { animation: bump .3s ease-out; }
+  @keyframes bump { 50% { transform: scale(1.35); text-shadow: 0 0 .4em var(--glow); } }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ch, .fade, .bump { animation: none !important; }
+  }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div class="hud" id="hud" hidden>
+  <span id="score">0</span>
+  <span class="best">Récord <span id="best">0</span></span>
+</div>
+
+<section class="overlay" id="start">
+  <h1 aria-label="Diego Palacio">
+    <span class="word" aria-hidden="true"><span class="ch" style="--i:0">D</span><span class="ch" style="--i:1">I</span><span class="ch" style="--i:2">E</span><span class="ch" style="--i:3">G</span><span class="ch" style="--i:4">O</span></span>
+    <span class="word" aria-hidden="true"><span class="ch" style="--i:5">P</span><span class="ch" style="--i:6">A</span><span class="ch" style="--i:7">L</span><span class="ch" style="--i:8">A</span><span class="ch" style="--i:9">C</span><span class="ch" style="--i:10">I</span><span class="ch" style="--i:11">O</span></span>
+  </h1>
+  <div class="cast fade" style="--d:.9s">
+    <figure><img src="assets/bolsa.png" alt=""><figcaption>Atrapa</figcaption></figure>
+    <figure><img src="assets/diego.png" alt=""><figcaption>Diego</figcaption></figure>
+    <figure><img src="assets/guardia.png" alt=""><figcaption>Esquiva</figcaption></figure>
+  </div>
+  <button id="play" class="fade" style="--d:1.1s" type="button">Jugar</button>
+  <p class="note fade" style="--d:1.3s">Jugar bajo tu propio riesgo</p>
+</section>
+
+<section class="overlay" id="over" hidden>
+  <h2 aria-label="Te atraparon">
+    <span class="word" aria-hidden="true"><span class="ch" style="--i:0">T</span><span class="ch" style="--i:1">E</span></span>
+    <span class="word" aria-hidden="true"><span class="ch" style="--i:2">A</span><span class="ch" style="--i:3">T</span><span class="ch" style="--i:4">R</span><span class="ch" style="--i:5">A</span><span class="ch" style="--i:6">P</span><span class="ch" style="--i:7">A</span><span class="ch" style="--i:8">R</span><span class="ch" style="--i:9">O</span><span class="ch" style="--i:10">N</span></span>
+  </h2>
+  <p class="final fade" style="--d:.7s">Bolsas atrapadas<strong id="final-score">0</strong><span id="new-best" hidden>¡Nuevo récord!</span></p>
+  <button id="again" class="fade" style="--d:.9s" type="button">Jugar otra vez</button>
+  <p class="help fade" style="--d:1.1s">Mueve a Diego con el dedo, el mouse o las flechas del teclado.</p>
+</section>
+
+<script src="game.js"></script>
+</body>
+</html>

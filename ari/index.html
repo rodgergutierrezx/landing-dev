@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>ARI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,800&display=swap">
+<link rel="preload" as="image" href="assets/cara/normal.webp">
+<style>
+  /* Fondo negro, letras blancas. Columna: barra de salud arriba, ARI al centro, comida abajo */
+  :root {
+    --bg: #000;
+    --fg: #fff;
+    --muted: rgba(255, 255, 255, 0.6);
+    --faint: rgba(255, 255, 255, 0.16);
+    --glow: rgba(255, 255, 255, 0.6);
+    --danger: #ff2d2d;
+    --good: #22e06b;
+    --display: "Bricolage Grotesque", "Helvetica Neue", Arial, sans-serif;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    height: 100%;
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--display);
+    font-weight: 500;
+    overflow: hidden;
+    overscroll-behavior: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  img { -webkit-user-drag: none; user-drag: none; }
+  [hidden] { display: none !important; }
+
+  /* ---------- Destello de fondo ---------- */
+  .flash {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0;
+    z-index: 0;
+  }
+  .flash.bad {
+    background: radial-gradient(circle at 50% 45%, rgba(255, 45, 45, .55), rgba(255, 0, 0, .25) 55%, rgba(120, 0, 0, .5));
+    animation: danger 1.6s steps(1, end);
+  }
+  .flash.good {
+    background: radial-gradient(circle at 50% 45%, rgba(34, 224, 107, .5), rgba(0, 140, 60, .18) 60%, transparent);
+    animation: heal 1.4s ease-out;
+  }
+  @keyframes danger {
+    0% { opacity: 1; } 12% { opacity: 0; } 24% { opacity: 1; } 36% { opacity: 0; }
+    48% { opacity: 1; } 60% { opacity: 0; } 72% { opacity: .7; } 84%, 100% { opacity: 0; }
+  }
+  @keyframes heal { 0% { opacity: 0; } 25% { opacity: 1; } 100% { opacity: 0; } }
+
+  /* ---------- Portada ---------- */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 26px;
+    text-align: center;
+    padding-block: max(24px, env(safe-area-inset-top, 0px)) max(24px, env(safe-area-inset-bottom, 0px));
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    background: var(--bg);
+    z-index: 5;
+  }
+  h1 {
+    margin: 0;
+    font-weight: 800;
+    font-size: clamp(5rem, 30vw, 12rem);
+    line-height: .9;
+    letter-spacing: -0.03em;
+    display: flex;
+  }
+  .ch {
+    display: inline-block;
+    animation:
+      rise 1.1s cubic-bezier(.2, .9, .25, 1.15) both,
+      wave 3.2s ease-in-out infinite;
+    animation-delay: calc(var(--i) * 70ms), calc(1.4s + var(--i) * 110ms);
+  }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(0.6em) rotate(8deg) scale(.8); filter: blur(14px); }
+    to   { opacity: 1; transform: none; filter: blur(0); }
+  }
+  @keyframes wave {
+    0%, 60%, 100% { transform: translateY(0); text-shadow: 0 0 0 transparent; }
+    30% { transform: translateY(-0.12em); text-shadow: 0 0 0.35em var(--glow); }
+  }
+  .fade { animation: rise .9s cubic-bezier(.2, .9, .25, 1.1) both; animation-delay: var(--d, .8s); }
+  .cover-face { width: min(52vw, 220px); max-width: 100%; filter: drop-shadow(0 0 24px rgba(255,255,255,.18)); }
+  .cover-face img { width: 100%; display: block; animation: idle 3.4s ease-in-out infinite; }
+
+  button {
+    font: inherit;
+    font-weight: 800;
+    color: var(--bg);
+    background: var(--fg);
+    border: 2px solid var(--fg);
+    border-radius: 14px;
+    cursor: pointer;
+    transition: transform .15s, box-shadow .2s;
+  }
+  button:hover { transform: translateY(-2px); box-shadow: 0 0 26px var(--glow); }
+  button:focus-visible { outline: 3px solid var(--fg); outline-offset: 4px; }
+  .big { font-size: 1.4rem; padding: 16px 44px; }
+  .note { margin: 0; font-size: .95rem; color: var(--muted); letter-spacing: .04em; }
+
+  /* ---------- Juego ---------- */
+  .game {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    padding-block: max(14px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-bottom, 0px));
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    z-index: 1;
+  }
+
+  /* Barra de salud */
+  .health { width: min(100%, 720px); margin-inline: auto; display: flex; flex-direction: column; gap: 8px; }
+  .health-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  .stage { font-weight: 800; font-size: clamp(1.4rem, 6vw, 2rem); letter-spacing: -0.01em; text-transform: uppercase; }
+  .stage.pop { animation: pop .6s cubic-bezier(.2, .9, .25, 1.3); }
+  @keyframes pop { 0% { transform: scale(.6); filter: blur(6px); opacity: 0; } 100% { transform: none; filter: none; opacity: 1; } }
+  .level-tag { font-size: .8rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+  .bar {
+    position: relative;
+    height: 14px;
+    border-radius: 99px;
+    border: 2px solid var(--fg);
+    overflow: hidden;
+  }
+  .bar-fill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 50%;
+    background: var(--fg);
+    border-radius: 99px;
+    transition: width .9s cubic-bezier(.2, .9, .25, 1.1), background .6s;
+  }
+  .bar[data-zone="bad"] .bar-fill { background: linear-gradient(90deg, var(--fg), var(--danger)); }
+  .bar[data-zone="thin"] .bar-fill { background: linear-gradient(90deg, #ffb020, var(--fg)); }
+  .bar[data-zone="extreme"] { animation: alarm .8s steps(1, end) infinite; }
+  @keyframes alarm { 50% { border-color: var(--danger); box-shadow: 0 0 18px var(--danger); } }
+  .ticks {
+    display: grid;
+    grid-template-columns: repeat(9, 1fr);
+    font-size: .62rem;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .ticks span { text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: color .3s; }
+  .ticks span.on { color: var(--fg); font-weight: 800; }
+  @media (max-width: 560px) { .ticks span:not(.on) { color: transparent; } .ticks span.on { overflow: visible; } }
+
+  /* ARI */
+  .stage-area {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    place-items: center;
+    position: relative;
+  }
+  .face-wrap {
+    position: relative;
+    height: min(46vh, 92vw);
+    aspect-ratio: 640 / 604;
+    max-width: 100%;
+    transition: transform .25s;
+  }
+  .face-wrap.eager { transform: scale(1.07); }
+  .face-wrap.doubt { transform: rotate(-6deg) translateX(-3%); }
+  .face { position: absolute; inset: 0; animation: idle 3.4s ease-in-out infinite; transform-origin: 50% 80%; }
+  .face img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    filter: drop-shadow(0 0 22px rgba(255,255,255,.14));
+    transition: opacity .5s;
+  }
+  .face img.out { opacity: 0; }
+  @keyframes idle {
+    0%, 100% { transform: translateY(0) rotate(0); }
+    50% { transform: translateY(-1.5%) rotate(.6deg); }
+  }
+  /* Gesto de "sí" mientras come: cabeceo + mordidas */
+  .face.yes { animation: yes 1.3s ease-in-out; }
+  @keyframes yes {
+    0%   { transform: none; }
+    12%  { transform: translateY(5%) scaleY(.94) rotateX(18deg); }
+    24%  { transform: translateY(-2%) scaleY(1.03); }
+    36%  { transform: translateY(5%) scaleY(.94) rotateX(18deg); }
+    48%  { transform: translateY(-2%) scaleY(1.03); }
+    60%  { transform: translateY(4%) scaleY(.95) rotateX(14deg); }
+    72%  { transform: translateY(-1%) scaleY(1.02); }
+    100% { transform: none; }
+  }
+  /* Gesto de "no" al rechazar */
+  .face.no { animation: no .9s ease-in-out; }
+  @keyframes no {
+    0%, 100% { transform: none; }
+    15% { transform: translateX(-7%) rotate(-7deg); }
+    35% { transform: translateX(7%) rotate(7deg); }
+    55% { transform: translateX(-5%) rotate(-5deg); }
+    75% { transform: translateX(4%) rotate(4deg); }
+  }
+  .face.yes, .face.no { will-change: transform; }
+  .face.grow { animation: grow .7s cubic-bezier(.2, .9, .25, 1.4); }
+  @keyframes grow { 0% { transform: scale(.85); } 60% { transform: scale(1.08); } 100% { transform: none; } }
+
+  .bubble {
+    position: absolute;
+    left: 50%;
+    top: 4%;
+    transform: translateX(-50%);
+    font-weight: 800;
+    font-size: clamp(1.2rem, 5vw, 1.7rem);
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+  }
+  .bubble.show { animation: bubble 1.3s ease-out; }
+  @keyframes bubble {
+    0% { opacity: 0; transform: translate(-50%, 20px) scale(.7); filter: blur(6px); }
+    20% { opacity: 1; transform: translate(-50%, 0) scale(1); filter: none; }
+    75% { opacity: 1; }
+    100% { opacity: 0; transform: translate(-50%, -24px); }
+  }
+  .crumb { position: fixed; width: 9px; height: 9px; border-radius: 50%; pointer-events: none; z-index: 4; }
+
+  /* Bandeja de comida */
+  .tray { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .plate {
+    position: relative;
+    width: min(38vw, 170px, 20vh);
+    height: min(38vw, 170px, 20vh);
+    flex: none;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    border: 2px dashed var(--faint);
+  }
+  .food {
+    position: absolute;
+    inset: 7%;
+    width: 86%;
+    height: 86%;
+    object-fit: contain;
+    cursor: grab;
+    touch-action: none;
+    filter: drop-shadow(0 8px 14px rgba(255,255,255,.12));
+    animation: bob 2.2s ease-in-out infinite;
+  }
+  .food.enter { animation: drop .6s cubic-bezier(.2, .9, .25, 1.3) both, bob 2.2s ease-in-out .6s infinite; }
+  @keyframes drop { from { opacity: 0; transform: translateY(-40px) scale(.5) rotate(-20deg); filter: blur(10px); } to { opacity: 1; transform: none; filter: none; } }
+  @keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+  .food.dragging {
+    position: fixed;
+    width: min(32vw, 150px);
+    height: min(32vw, 150px);
+    margin: 0;
+    inset: 0 auto auto 0;
+    cursor: grabbing;
+    animation: none;
+    z-index: 3;
+    filter: drop-shadow(0 18px 24px rgba(0,0,0,.6)) drop-shadow(0 0 16px rgba(255,255,255,.2));
+  }
+  .food.returning { transition: transform .45s cubic-bezier(.2, .9, .25, 1.2); }
+  .food.eaten { transition: transform .45s ease-in, opacity .45s ease-in; opacity: 0; }
+
+  .food-info { display: flex; align-items: center; gap: 10px; min-height: 1.5em; text-align: center; }
+  .food-name { font-size: 1rem; }
+  .kind {
+    font-size: .7rem;
+    font-weight: 800;
+    letter-spacing: .12em;
+    padding: 3px 8px;
+    border-radius: 99px;
+    border: 1.5px solid currentColor;
+  }
+  .kind.fat { color: #ffb020; }
+  .kind.fit { color: var(--good); }
+  .controls { display: flex; gap: 10px; align-items: center; }
+  .swap { font-size: 1rem; padding: 10px 20px; }
+  .ghost { background: transparent; color: var(--fg); font-size: .9rem; padding: 10px 14px; }
+  .hint { margin: 0; color: var(--muted); font-size: .85rem; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ch, .fade, .face, .face img, .food, .cover-face img { animation: none !important; }
+    .flash.bad, .flash.good { animation-duration: .01s; }
+  }
+</style>
+</head>
+<body>
+<div class="flash" id="flash"></div>
+
+<section class="overlay" id="cover">
+  <h1 aria-label="ARI">
+    <span class="ch" style="--i:0" aria-hidden="true">A</span><span class="ch" style="--i:1" aria-hidden="true">R</span><span class="ch" style="--i:2" aria-hidden="true">I</span>
+  </h1>
+  <div class="cover-face fade" style="--d:.7s"><img src="assets/cara/normal.webp" alt="ARI"></div>
+  <button class="big fade" style="--d:1s" id="play" type="button">Jugar ahora</button>
+  <p class="note fade" style="--d:1.2s">Jugar bajo tu propio riesgo</p>
+</section>
+
+<main class="game" id="game" hidden>
+  <div class="health">
+    <div class="health-head">
+      <span class="stage" id="stage">Normal</span>
+      <span class="level-tag" id="level-tag">Nivel normal</span>
+    </div>
+    <div class="bar" id="bar" role="progressbar" aria-valuemin="0" aria-valuemax="10" aria-valuenow="5" aria-label="Estado de salud de ARI">
+      <div class="bar-fill" id="bar-fill"></div>
+    </div>
+    <div class="ticks" id="ticks" aria-hidden="true"></div>
+  </div>
+
+  <div class="stage-area">
+    <div class="face-wrap" id="face-wrap">
+      <div class="face" id="face">
+        <img id="face-a" src="assets/cara/normal.webp" alt="ARI">
+        <img id="face-b" class="out" src="assets/cara/normal.webp" alt="">
+      </div>
+      <div class="bubble" id="bubble"></div>
+    </div>
+  </div>
+
+  <div class="tray">
+    <div class="food-info"><span class="kind" id="kind">FAT</span><span class="food-name" id="food-name"></span></div>
+    <div class="plate" id="plate"><img class="food" id="food" alt="" draggable="false"></div>
+    <div class="controls">
+      <button class="swap" id="swap" type="button">Cambiar comida</button>
+      <button class="ghost" id="mute" type="button" aria-pressed="false">Sonido: sí</button>
+    </div>
+    <p class="hint">Arrastra la comida hasta la cara de ARI.</p>
+  </div>
+</main>
+
+<script src="ari.js"></script>
+</body>
+</html>

@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Gato en Línea</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,800&display=swap">
+<style>
+  /* Fondo negro, todo en blanco: tablero centrado con título animado arriba */
+  :root {
+    --bg: #000;
+    --fg: #fff;
+    --muted: rgba(255, 255, 255, 0.55);
+    --line: rgba(255, 255, 255, 0.9);
+    --faint: rgba(255, 255, 255, 0.14);
+    --glow: rgba(255, 255, 255, 0.6);
+    --display: "Bricolage Grotesque", "Helvetica Neue", Arial, sans-serif;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--display);
+    font-weight: 500;
+    display: grid;
+    place-items: center;
+    padding-block: 24px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  main {
+    width: min(100%, 440px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 28px;
+  }
+  [hidden] { display: none !important; }
+
+  /* Título con la misma animación del Hello World */
+  h1 {
+    margin: 0;
+    font-weight: 800;
+    font-size: clamp(3.5rem, 18vw, 6.5rem);
+    line-height: 1;
+    letter-spacing: -0.03em;
+    display: flex;
+  }
+  .ch {
+    display: inline-block;
+    animation:
+      rise 1.1s cubic-bezier(.2, .9, .25, 1.15) both,
+      wave 3.2s ease-in-out infinite;
+    animation-delay: calc(var(--i) * 70ms), calc(1.4s + var(--i) * 110ms);
+  }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(0.6em) rotate(8deg) scale(.8); filter: blur(14px); }
+    to   { opacity: 1; transform: none; filter: blur(0); }
+  }
+  @keyframes wave {
+    0%, 60%, 100% { transform: translateY(0); text-shadow: 0 0 0 transparent; }
+    30% { transform: translateY(-0.12em); text-shadow: 0 0 0.35em var(--glow); }
+  }
+
+  .screen {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    animation: rise .7s cubic-bezier(.2, .9, .25, 1.1) both;
+  }
+  .status {
+    margin: 0;
+    font-size: 1.25rem;
+    text-align: center;
+    min-height: 1.6em;
+    text-wrap: balance;
+  }
+  .hint { margin: 0; color: var(--muted); font-size: .95rem; text-align: center; }
+
+  /* Formulario de nombre */
+  form { width: 100%; display: flex; flex-direction: column; gap: 12px; }
+  label { font-size: .8rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  input {
+    width: 100%;
+    font: inherit;
+    font-size: 1.25rem;
+    color: var(--fg);
+    background: transparent;
+    border: 2px solid var(--line);
+    border-radius: 12px;
+    padding: 14px 16px;
+  }
+  input::placeholder { color: var(--muted); }
+  button {
+    font: inherit;
+    font-weight: 800;
+    font-size: 1.1rem;
+    color: var(--bg);
+    background: var(--fg);
+    border: 2px solid var(--fg);
+    border-radius: 12px;
+    padding: 14px 20px;
+    cursor: pointer;
+    transition: transform .15s, box-shadow .2s;
+  }
+  button:hover { transform: translateY(-2px); box-shadow: 0 0 24px var(--glow); }
+  button.ghost { background: transparent; color: var(--fg); }
+  input:focus-visible, button:focus-visible, .cell:focus-visible { outline: 3px solid var(--fg); outline-offset: 3px; }
+
+  /* Espera de rival */
+  .dots { display: flex; gap: 10px; }
+  .dots span {
+    width: 12px; height: 12px; border-radius: 50%;
+    background: var(--fg);
+    animation: bounce 1.2s ease-in-out infinite;
+  }
+  .dots span:nth-child(2) { animation-delay: .15s; }
+  .dots span:nth-child(3) { animation-delay: .3s; }
+  @keyframes bounce {
+    0%, 80%, 100% { transform: translateY(0); opacity: .35; }
+    40% { transform: translateY(-12px); opacity: 1; box-shadow: 0 0 14px var(--glow); }
+  }
+
+  /* Jugadores */
+  .players { width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .player {
+    min-width: 0;
+    border: 2px solid var(--faint);
+    border-radius: 14px;
+    padding: 12px 14px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 10px;
+    transition: border-color .3s, box-shadow .3s, transform .3s;
+  }
+  .player.active { border-color: var(--fg); box-shadow: 0 0 22px rgba(255,255,255,.25); transform: translateY(-3px); }
+  .player .sym { font-weight: 800; font-size: 1.8rem; line-height: 1; }
+  .player .who { min-width: 0; display: flex; flex-direction: column; }
+  .player .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .player .tag { font-size: .7rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  .player .score { font-weight: 800; font-size: 1.3rem; font-variant-numeric: tabular-nums; }
+
+  /* Tablero */
+  .board {
+    position: relative;
+    width: min(100%, 360px);
+    aspect-ratio: 1;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+  }
+  .cell {
+    font: inherit;
+    font-weight: 800;
+    font-size: clamp(3.5rem, 20vw, 6rem);
+    line-height: 1;
+    color: var(--fg);
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    transition: background .2s;
+  }
+  .cell:hover { transform: none; box-shadow: none; }
+  .board.my-turn .cell:empty:hover { background: rgba(255,255,255,.06); }
+  .board:not(.my-turn) .cell, .cell:not(:empty) { cursor: default; }
+  .cell:nth-child(-n+6) { border-bottom: 3px solid var(--line); }
+  .cell:not(:nth-child(3n)) { border-right: 3px solid var(--line); }
+  .mark { display: inline-block; animation: drop .6s cubic-bezier(.2, .9, .25, 1.3) both; }
+  @keyframes drop {
+    from { opacity: 0; transform: translateY(-0.4em) rotate(-25deg) scale(.4); filter: blur(12px); }
+    to   { opacity: 1; transform: none; filter: blur(0); }
+  }
+  .cell.win .mark {
+    animation: drop .6s cubic-bezier(.2, .9, .25, 1.3) both, winwave 1.6s ease-in-out infinite;
+    animation-delay: 0s, calc(.6s + var(--w) * 150ms);
+  }
+  @keyframes winwave {
+    0%, 100% { transform: scale(1); text-shadow: 0 0 0 transparent; }
+    50% { transform: scale(1.15) translateY(-0.06em); text-shadow: 0 0 .4em var(--glow); }
+  }
+  .board.over .cell:not(.win) .mark { opacity: .3; transition: opacity .6s; }
+  .shake { animation: shake .35s; }
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-8px); }
+    75% { transform: translateX(8px); }
+  }
+
+  .actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1 aria-label="Gato">
+    <span class="ch" style="--i:0" aria-hidden="true">G</span><span class="ch" style="--i:1" aria-hidden="true">a</span><span class="ch" style="--i:2" aria-hidden="true">t</span><span class="ch" style="--i:3" aria-hidden="true">o</span>
+  </h1>
+
+  <!-- 1. Nombre -->
+  <section class="screen" id="join-screen">
+    <form id="join-form" autocomplete="off">
+      <label for="name">Tu nombre</label>
+      <input id="name" name="name" maxlength="20" placeholder="Escribe tu nombre" required>
+      <button type="submit">Buscar rival</button>
+    </form>
+    <p class="hint">Al empezar se reparten la X y la O al azar. La X abre.</p>
+  </section>
+
+  <!-- 2. Esperando -->
+  <section class="screen" id="wait-screen" hidden>
+    <div class="dots" aria-hidden="true"><span></span><span></span><span></span></div>
+    <p class="status">Esperando a otro jugador…</p>
+    <p class="hint">Abre esta página en otro navegador o comparte el link.</p>
+    <button class="ghost" id="cancel-btn" type="button">Cancelar</button>
+  </section>
+
+  <!-- 3. Partida -->
+  <section class="screen" id="game-screen" hidden>
+    <div class="players">
+      <div class="player" id="p-X">
+        <span class="sym">X</span>
+        <span class="who"><span class="name"></span><span class="tag"></span></span>
+        <span class="score">0</span>
+      </div>
+      <div class="player" id="p-O">
+        <span class="sym">O</span>
+        <span class="who"><span class="name"></span><span class="tag"></span></span>
+        <span class="score">0</span>
+      </div>
+    </div>
+
+    <p class="status" id="status" aria-live="polite"></p>
+
+    <div class="board" id="board" role="grid" aria-label="Tablero del gato"></div>
+
+    <div class="actions" id="end-actions" hidden>
+      <button id="rematch-btn" type="button">Revancha</button>
+      <button class="ghost" id="new-btn" type="button">Nuevo rival</button>
+    </div>
+  </section>
+</main>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+  const socket = io();
+  const $ = (id) => document.getElementById(id);
+  const screens = { join: $("join-screen"), wait: $("wait-screen"), game: $("game-screen") };
+  const boardEl = $("board");
+  const statusEl = $("status");
+  let me = null;
+  let myName = "";
+  let state = null;
+
+  const cells = Array.from({ length: 9 }, (_, i) => {
+    const b = document.createElement("button");
+    b.className = "cell";
+    b.type = "button";
+    b.setAttribute("aria-label", `Casilla ${i + 1}`);
+    b.addEventListener("click", () => play(i));
+    boardEl.appendChild(b);
+    return b;
+  });
+
+  function show(name) {
+    for (const [key, el] of Object.entries(screens)) el.hidden = key !== name;
+  }
+
+  function join() {
+    socket.emit("join", { name: myName });
+    show("wait");
+  }
+
+  $("join-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    myName = $("name").value.trim();
+    if (!myName) return;
+    try { localStorage.setItem("gato-name", myName); } catch {}
+    join();
+  });
+  try { $("name").value = localStorage.getItem("gato-name") || ""; } catch {}
+
+  $("cancel-btn").addEventListener("click", () => { socket.emit("leave"); show("join"); });
+  $("new-btn").addEventListener("click", join);
+  $("rematch-btn").addEventListener("click", () => {
+    socket.emit("rematch");
+    $("rematch-btn").disabled = true;
+    statusEl.textContent = "Esperando a que tu rival acepte la revancha…";
+  });
+
+  function play(i) {
+    if (!state || state.winner || state.draw || state.board[i]) return;
+    if (state.turn !== me) {
+      boardEl.classList.remove("shake");
+      void boardEl.offsetWidth;
+      boardEl.classList.add("shake");
+      return;
+    }
+    socket.emit("move", { index: i });
+  }
+
+  function render(fresh) {
+    const other = me === "X" ? "O" : "X";
+    for (const s of ["X", "O"]) {
+      const card = $("p-" + s);
+      card.querySelector(".name").textContent = state.names[s];
+      card.querySelector(".tag").textContent = s === me ? "Tú" : "Rival";
+      card.querySelector(".score").textContent = state.scores[s];
+      card.classList.toggle("active", !state.winner && !state.draw && state.turn === s);
+    }
+
+    state.board.forEach((v, i) => {
+      const cell = cells[i];
+      const current = cell.textContent;
+      if (fresh || current !== (v || "")) {
+        cell.innerHTML = v ? `<span class="mark">${v}</span>` : "";
+      }
+      const w = state.line ? state.line.indexOf(i) : -1;
+      cell.classList.toggle("win", w >= 0);
+      if (w >= 0) cell.style.setProperty("--w", w); else cell.style.removeProperty("--w");
+    });
+
+    const over = Boolean(state.winner || state.draw);
+    boardEl.classList.toggle("over", over);
+    boardEl.classList.toggle("my-turn", !over && state.turn === me);
+    $("end-actions").hidden = !over;
+    $("rematch-btn").disabled = false;
+
+    if (state.winner) {
+      statusEl.textContent = state.winner === me ? "¡Ganaste!" : `Ganó ${state.names[state.winner]}`;
+    } else if (state.draw) {
+      statusEl.textContent = "Empate";
+    } else if (state.turn === me) {
+      statusEl.textContent = `Tu turno, juegas con ${me}`;
+    } else {
+      statusEl.textContent = `Turno de ${state.names[other]}…`;
+    }
+  }
+
+  socket.on("waiting", () => show("wait"));
+
+  socket.on("start", (data) => {
+    me = data.you;
+    state = data;
+    show("game");
+    render(true);
+  });
+
+  socket.on("state", (data) => {
+    state = { ...state, ...data };
+    render(false);
+  });
+
+  socket.on("rematch-requested", () => {
+    statusEl.textContent = `${state.names[me === "X" ? "O" : "X"]} quiere la revancha`;
+  });
+
+  socket.on("opponent-left", ({ reason }) => {
+    state = null;
+    me = null;
+    show("join");
+    const msg = reason === "disconnected" ? "Tu rival se desconectó." : "Tu rival salió de la partida.";
+    document.querySelector("#join-screen .hint").textContent = msg + " Busca otro rival.";
+  });
+
+  socket.on("disconnect", () => {
+    if (!screens.join.hidden) return;
+    show("join");
+    document.querySelector("#join-screen .hint").textContent = "Se perdió la conexión con el servidor. Vuelve a intentarlo.";
+  });
+</script>
+</body>
+</html>

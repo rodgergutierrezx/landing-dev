@@ -36,17 +36,86 @@
   for (const f of FOODS) new Image().src = foodSrc(f);
 
   // ---------- Sonido ----------
+  // Se usa Web Audio: los sonidos se descargan y decodifican una vez y se
+  // reproducen al instante desde memoria. Safari en iPhone falla a menudo con
+  // <audio> (no precarga, cancela al reiniciar y se suspende al cambiar de app).
   const SND = { eat: "assets/sonidos/comiendo.mp3", no: "assets/sonidos/no.mp3" };
-  const audio = {};
+  const AC = window.AudioContext || window.webkitAudioContext;
+  let actx = null;
+  const buffers = {};
+  const playing = new Set();
+  const fallback = {};
   let muted = false;
   try { muted = localStorage.getItem("ari-muted") === "1"; } catch {}
+
+  // En iOS 16.4+ esto hace que el juego suene aunque el switch de silencio esté activado
+  try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch {}
+
+  function decode(ctx, data) {
+    // Safari viejo solo acepta la versión con callbacks
+    return new Promise((res, rej) => {
+      const p = ctx.decodeAudioData(data, res, rej);
+      if (p && p.then) p.then(res, rej);
+    });
+  }
+
+  function loadSounds() {
+    if (!AC || actx) return;
+    actx = new AC();
+    for (const [name, url] of Object.entries(SND)) {
+      fetch(url)
+        .then((r) => r.arrayBuffer())
+        .then((data) => decode(actx, data))
+        .then((buf) => { buffers[name] = buf; })
+        .catch(() => {});
+    }
+  }
+
+  // Debe llamarse dentro de un toque: iOS solo deja activar el audio así,
+  // y lo vuelve a suspender al bloquear el celular o cambiar de app.
+  function unlockAudio() {
+    loadSounds();
+    if (!actx) return;
+    if (actx.state !== "running") actx.resume().catch(() => {});
+    // Un sonido vacío dentro del gesto termina de desbloquear Safari
+    try {
+      const src = actx.createBufferSource();
+      src.buffer = actx.createBuffer(1, 1, 22050);
+      src.connect(actx.destination);
+      src.start(0);
+    } catch {}
+  }
+
   function play(name) {
     if (muted) return;
-    const a = audio[name] || (audio[name] = new Audio(SND[name]));
-    try { a.pause(); a.currentTime = 0; } catch {}
+    if (actx && buffers[name]) {
+      if (actx.state !== "running") actx.resume().catch(() => {});
+      const src = actx.createBufferSource();
+      src.buffer = buffers[name];
+      src.connect(actx.destination);
+      src.onended = () => playing.delete(src);
+      playing.add(src);
+      src.start(0);
+      return;
+    }
+    // Respaldo si Web Audio no existe o el sonido aún no termina de cargar
+    const a = fallback[name] || (fallback[name] = new Audio(SND[name]));
+    a.currentTime = 0;
     a.play().catch(() => {});
   }
-  function stopSounds() { for (const a of Object.values(audio)) { try { a.pause(); } catch {} } }
+
+  function stopSounds() {
+    for (const src of playing) { try { src.stop(); } catch {} }
+    playing.clear();
+    for (const a of Object.values(fallback)) { try { a.pause(); } catch {} }
+  }
+
+  // Cada toque reactiva el audio por si iOS lo suspendió
+  document.addEventListener("pointerdown", unlockAudio, { passive: true });
+  document.addEventListener("touchend", unlockAudio, { passive: true });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && actx && actx.state !== "running") actx.resume().catch(() => {});
+  });
 
   // ---------- Estado ----------
   let level = 0;
@@ -291,12 +360,7 @@
   });
 
   $("play").addEventListener("click", () => {
-    // Desbloquea el audio en celulares con el primer toque
-    for (const k of Object.keys(SND)) {
-      const a = audio[k] = new Audio(SND[k]);
-      a.muted = true;
-      a.play().then(() => { a.pause(); a.currentTime = 0; a.muted = false; }).catch(() => { a.muted = false; });
-    }
+    unlockAudio(); // primer toque: crea el audio y descarga los sonidos
     level = 0;
     newCounters();
     $("cover").hidden = true;
